@@ -1,9 +1,15 @@
 #![doc = include_str!("../README.md")]
 
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
+
 pub use proc_macro::*;
 
 pub type Observer<T> = <T as Observable>::Observer;
-pub type Changes<T> = <T as Observable>::Changes;
+pub type Changes<'a, T> = <T as Observable>::Changes<'a>;
 
 /// A trait for types that can be observed, allowing for change detection.
 ///
@@ -13,12 +19,88 @@ pub trait Observable {
     type Observer: Default;
 
     /// The type representing the changes between states
-    type Changes: Default;
+    type Changes<'a>
+    where
+        Self: 'a;
 
     /// Pulls changes since the last observed state and updates the observer.
     ///
     /// Returns the changes since the last observed changes using this observer.
-    fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes;
+    fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_>;
+}
+
+/// A wrapper that treats the inner value as untracked and always reports it as changed.
+///
+/// Use this when you don’t need change detection and just want to carry the current value each time.
+pub struct Untracked<T>(pub T);
+
+impl<T> Deref for Untracked<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for Untracked<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> From<T> for Untracked<T> {
+    fn from(value: T) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: 'static> Observable for Untracked<T> {
+    type Observer = ();
+    type Changes<'a> = &'a T;
+
+    fn pull_changes(&self, _observer: &mut Self::Observer) -> Self::Changes<'_> {
+        &self
+    }
+}
+
+/// A wrapper that observes `T` as a single atomic value and only reports changes if the value actually differs.
+///
+/// If the value is equal to the previously observed one, no change is reported.
+///
+/// This is useful for types where partial diffing isn’t possible, but you still want to avoid redundant updates.
+pub struct Atomic<T, H = DefaultHasher>(pub T, PhantomData<H>);
+
+impl<T, H> Deref for Atomic<T, H> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T, H> DerefMut for Atomic<T, H> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T, H> From<T> for Atomic<T, H> {
+    fn from(value: T) -> Self {
+        Self(value, PhantomData)
+    }
+}
+
+impl<T: 'static + Hash, H: Hasher + Default + 'static> Observable for Atomic<T, H> {
+    type Observer = (H, u64);
+    type Changes<'a> = Option<&'a T>;
+
+    fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_> {
+        let (hasher, previous_hash) = observer;
+        self.0.hash(hasher);
+        let current_hash = hasher.finish();
+        (*previous_hash != current_hash).then(|| {
+            *previous_hash = current_hash;
+            &self as &T
+        })
+    }
 }
 
 pub trait TriviallyObservable: Default + Copy {
@@ -34,11 +116,11 @@ macro_rules! impl_for {
         (@gat $name:ident<$at:ident> => $($ty:ty: $atv:ty);*) => { $( impl $name for $ty { type $at = $atv; } )* };
     }
 
-impl<T: TriviallyObservable> Observable for T {
+impl<T: TriviallyObservable + 'static> Observable for T {
     type Observer = T::Detective;
-    type Changes = T::Detective;
+    type Changes<'a> = T::Detective;
 
-    fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes {
+    fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_> {
         let changes = self.delta(observer);
         *observer = (*self).into();
         changes
@@ -68,6 +150,7 @@ impl_for!(SubObservable<Detective> => i8; i16; i32; i64; i128; f32; f64);
 impl_for!(@gat SubObservable<Detective> => u8: i16; u16: i32; u32: i64; u64: i128);
 
 //TODO: implement for collections
+//TODO: implement for tuples
 /*
 const _: () = {
     #[derive(Default)]

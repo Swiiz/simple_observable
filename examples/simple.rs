@@ -1,6 +1,7 @@
 use simple_observable::*;
 
-// Automatically derives Observable for Example, as well as implement (Default), Debug, PartialEq, and Eq for the Change<Example> and Observer<Example>
+// Automatically derives `Observable` for `Example`, `Default` for Changes<Example>
+// and applies `PartialEq`, and `Eq` to `Observer<Example>` and `Changes<Example>`.
 #[observable(Debug, PartialEq, Eq)]
 pub struct Example {
     a: i32,
@@ -18,5 +19,5 @@ fn main() {
     state.a -= 1;
     println!("{:?}", state.pull_changes(&mut obs));
     let changes: Changes<Example> = state.pull_changes(&mut obs);
-    assert!(changes == Default::default());
+    assert!(changes == Changes::<Example> { a: 0, b: 0 });
 }

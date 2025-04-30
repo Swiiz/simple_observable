@@ -24,8 +24,8 @@ Use the `#[observable]` attribute to derive the `Observable` trait for your stru
 ```rust
 use simple_observable::*;
 
-/// Automatically derives `Observable` for `Example`
-/// and applies `Debug`, `PartialEq`, and `Eq` to `Observer<Example>` and `Changes<Example>`.
+/// Automatically derives `Observable` for `Example`, `Default` for Changes<Example>
+/// and applies `PartialEq`, and `Eq` to `Observer<Example>` and `Changes<Example>`.
 #[observable(Debug, PartialEq, Eq)]
 pub struct Example {
     a: i32,

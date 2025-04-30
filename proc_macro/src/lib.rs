@@ -27,7 +27,7 @@ use syn::{DeriveInput, Token, parse::Parse, parse_macro_input, punctuated::Punct
 /// ```
 ///
 /// # Generated Code:
-/// - `Observer<YourStruct>`: A struct holding the previous values of each field.
+/// - `Observer<YourStruct>`: A struct holding the previous values of each field, implementing `Default`.
 /// - `Changes<YourStruct>`: A struct representing the changes between the current and previous state.
 /// - `pull_changes`: A method that computes and returns the changes, while updating the observer.
 #[proc_macro_attribute]
@@ -59,16 +59,16 @@ pub fn observable(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #( #field_names: <#field_types as Observable>::Observer, )*
             }
 
-            #[derive(Default, #(#derives),*)]
-            pub struct #changes_name {
-                #( #field_names: <#field_types as Observable>::Changes, )*
+            #[derive(#(#derives),*)]
+            pub struct #changes_name<'a> {
+                #( #field_names: <#field_types as Observable>::Changes<'a>, )*
             }
 
             impl Observable for #struct_name {
                 type Observer = #observer_name;
-                type Changes = #changes_name;
+                type Changes<'a> = #changes_name<'a>;
 
-                fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes {
+                fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_> {
                     #changes_name {
                         #( #field_names: self.#field_names.pull_changes(&mut observer.#field_names), )*
                     }
