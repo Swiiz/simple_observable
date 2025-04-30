@@ -1,4 +1,4 @@
-# 🔭 simple_observable 🦀
+# 🔭 simple_observable 🦀 ([Docs](https://swiiz.github.io/simple_observable))
 
 A simple Rust crate to track and observe changes in the state of your types.
 
