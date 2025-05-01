@@ -149,8 +149,30 @@ impl TriviallyObservable for bool {
 impl_for!(SubObservable<Detective> => i8; i16; i32; i64; i128; f32; f64);
 impl_for!(@gat SubObservable<Detective> => u8: i16; u16: i32; u32: i64; u64: i128);
 
+macro_rules! impl_obs_for_tuples {
+    ($($ty:ident $i:tt)*) => {
+        impl<$($ty: Observable + 'static),*> Observable for ($($ty,)*) {
+            type Observer = ($(<$ty as Observable>::Observer,)*);
+            type Changes<'a> = ($(<$ty as Observable>::Changes<'a>,)*);
+
+            fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_> {
+                ($( self.$i.pull_changes(&mut observer.$i), )*)
+            }
+        }
+    };
+}
+
+impl_obs_for_tuples!(A 0);
+impl_obs_for_tuples!(A 0 B 1);
+impl_obs_for_tuples!(A 0 B 1 C 2);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3 E 4);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3 E 4 F 5);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3 E 4 F 5 G 6);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7);
+impl_obs_for_tuples!(A 0 B 1 C 2 D 3 E 4 F 5 G 6 H 7 I 8);
+
 //TODO: implement for collections
-//TODO: implement for tuples
 /*
 const _: () = {
     #[derive(Default)]
