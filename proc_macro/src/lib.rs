@@ -55,8 +55,8 @@ pub fn observable(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         const _: () = {
             #[derive(Default, #(#derives),*)]
-            pub struct #observer_name {
-                #( #field_names: <#field_types as Observable>::Observer, )*
+            pub struct #observer_name<'a> {
+                #( #field_names: <#field_types as Observable>::Observer<'a>, )*
             }
 
             #[derive(#(#derives),*)]
@@ -65,10 +65,10 @@ pub fn observable(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             impl Observable for #struct_name {
-                type Observer = #observer_name;
+                type Observer<'a> = #observer_name<'a>;
                 type Changes<'a> = #changes_name<'a>;
 
-                fn pull_changes(&self, observer: &mut Self::Observer) -> Self::Changes<'_> {
+                fn pull_changes(&self, observer: &mut Self::Observer<'_>) -> Self::Changes<'_> {
                     #changes_name {
                         #( #field_names: self.#field_names.pull_changes(&mut observer.#field_names), )*
                     }
