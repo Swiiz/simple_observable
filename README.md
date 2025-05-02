@@ -6,7 +6,7 @@ A simple Rust crate to track and observe changes in the state of your types.
 - Monitor changes from the perspective of multiple observers.
 - Automatically derives the `Observable` trait for structs with the `#[observable]` attribute macro.
 - Tracks and computes changes between the current state and the previous state of your struct.
-- Supports custom derives (e.g., `Debug`, `PartialEq`, `Eq`) for the generated `Observer` and `Changes` types.
+- Supports custom derives (e.g., `Debug`, `PartialEq`, `Eq`) for the generated `Changes` types.
 
 ## Usage
 
@@ -24,8 +24,8 @@ Use the `#[observable]` attribute to derive the `Observable` trait for your stru
 ```rust
 use simple_observable::*;
 
-/// Automatically derives `Observable` for `Example`, `Default` for Changes<Example>
-/// and applies `PartialEq`, and `Eq` to `Observer<Example>` and `Changes<Example>`.
+// Automatically derives `Observable` for `Example`, `Default` for Observer<Example>
+// and applies `Debug`, `PartialEq`, and `Eq` to `Changes<Example>`.
 #[observable(Debug, PartialEq, Eq)]
 pub struct Example {
     a: i32,
@@ -52,4 +52,5 @@ fn main() {
 4. `pull_changes` method calculates and returns the changes while updating the observer.
 
 ### Todos:
-- Support for more builtin observable types such as Collections.
+- Built-in types with optimized implementations for observing.
+- Support for more types.

@@ -15,7 +15,7 @@ use syn::{DeriveInput, Token, parse::Parse, parse_macro_input, punctuated::Punct
 /// ```
 ///
 /// # Parameters:
-/// - `<derives>`: Comma-separated list of derive attributes (e.g., `Debug`, `PartialEq`, `Eq`) applied to the generated `Observer` and `Changes` types.
+/// - `<derives>`: Comma-separated list of derive attributes (e.g., `Debug`, `PartialEq`, `Eq`) applied to the generated Changes` types.
 ///
 /// # Example:
 /// ```rust
@@ -46,6 +46,7 @@ pub fn observable(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let fields = &data_struct.fields;
+    let opt_lt = fields.iter().next().map(|f| quote! { <'a> });
     let field_names: Vec<_> = fields.iter().map(|f| f.ident.as_ref().unwrap()).collect();
     let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
     let derives: Vec<_> = attr.derives.iter().collect();
@@ -54,23 +55,23 @@ pub fn observable(attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         const _: () = {
-            #[derive(Default, #(#derives),*)]
-            pub struct #observer_name<'a> {
-                #( #field_names: <#field_types as Observable>::Observer<'a>, )*
+            #[derive(Default)]
+            pub struct #observer_name #opt_lt {
+                #( pub #field_names: Observer<'a, #field_types>, )*
             }
 
             #[derive(#(#derives),*)]
-            pub struct #changes_name<'a> {
-                #( #field_names: <#field_types as Observable>::Changes<'a>, )*
+            pub struct #changes_name #opt_lt {
+                #( pub #field_names: Changes<'a, #field_types>, )*
             }
 
             impl Observable for #struct_name {
-                type Observer<'a> = #observer_name<'a>;
-                type Changes<'a> = #changes_name<'a>;
+                type Observer<'a> = #observer_name #opt_lt;
+                type Changes<'a> = #changes_name #opt_lt;
 
-                fn pull_changes(&self, observer: &mut Self::Observer<'_>) -> Self::Changes<'_> {
+                fn pull_changes(&self, observer: &mut Observer<'_, Self>) -> Changes<'_, Self> {
                     #changes_name {
-                        #( #field_names: self.#field_names.pull_changes(&mut observer.#field_names), )*
+                        #( #field_names: self.#field_names.pull_changes(&mut observer.inner.#field_names), )*
                     }
                 }
             }

@@ -1,7 +1,7 @@
 use simple_observable::*;
 
-// Automatically derives `Observable` for `Example`, `Default` for Changes<Example>
-// and applies `PartialEq`, and `Eq` to `Observer<Example>` and `Changes<Example>`.
+// Automatically derives `Observable` for `Example`, `Default` for Observer<Example>
+// and applies `Debug`, `PartialEq`, and `Eq` to `Changes<Example>`.
 #[observable(Debug, PartialEq, Eq)]
 pub struct Example {
     a: i32,
