@@ -37,4 +37,6 @@ fn iter_example() {
     println!("{:?}", vec.pull_changes(&mut obs));
     vec.pop();
     println!("{:?}", vec.pull_changes(&mut obs));
+    vec.push(8);
+    println!("{:?}", vec.pull_changes(&mut obs));
 }

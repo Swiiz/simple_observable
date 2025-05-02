@@ -60,5 +60,8 @@ where
     fn pull_changes(
         &self,
         observer: &mut Observer<ChangeIter<Self>>,
-    ) -> Vec<<<Self as AsIter>::Item as Observable>::Changes<'_>>;
+    ) -> Box<[<<Self as AsIter>::Item as Observable>::Changes<'_>]>;
 }
+
+//TODO: Currently we return changes for all elements in a given type.
+//TODO: We may however use some "buitlin types" with T: Observable<Changes = Option<_>> to filter changes.

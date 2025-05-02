@@ -178,12 +178,14 @@ where
 pub(crate) fn pull_iter_changes<'a, T: AsIter>(
     iter: &'a T,
     observer: &mut Vec<Observer<<T as AsIter>::Item>>,
-) -> Vec<Changes<'a, <T as AsIter>::Item>>
+) -> Box<[Changes<'a, <T as AsIter>::Item>]>
 where
     <T as AsIter>::Item: Observable,
 {
     let prev_len = observer.len();
-    iter.iter()
+
+    let changes: Box<_> = iter
+        .iter()
         .enumerate()
         .map(|(i, v)| {
             if i >= prev_len {
@@ -191,7 +193,11 @@ where
             }
             v.pull_changes(&mut observer[i])
         })
-        .collect()
+        .collect();
+    if observer.len() > changes.len() {
+        observer.truncate(changes.len());
+    }
+    changes
 }
 
 impl<T: 'static + AsIter> Observable for ChangeIter<T>
@@ -200,7 +206,7 @@ where
 {
     type Observer<'a> = Vec<Observer<'a, <T as AsIter>::Item>>;
     type Changes<'a>
-        = Vec<<<T as AsIter>::Item as Observable>::Changes<'a>>
+        = Box<[<<T as AsIter>::Item as Observable>::Changes<'a>]>
     where
         Self: 'a;
 
@@ -217,7 +223,7 @@ where
     fn pull_changes(
         &self,
         observer: &mut Observer<ChangeIter<Self>>,
-    ) -> Vec<<<T as AsIter>::Item as Observable>::Changes<'_>> {
+    ) -> Box<[<<T as AsIter>::Item as Observable>::Changes<'_>]> {
         pull_iter_changes(self, &mut observer.inner)
     }
 }
