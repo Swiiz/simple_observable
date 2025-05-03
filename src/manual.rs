@@ -21,7 +21,7 @@ pub struct MapChanges<'a, K, V: Observable + 'static> {
     pub removed: Box<[K]>,
 }
 
-//TODO: write doc
+/// A trait for types that can be iterated over as owned or borrowed items.
 pub trait AsIter {
     type Item;
     type Iter<'a>: Iterator<Item = &'a Self::Item>
@@ -31,7 +31,6 @@ pub trait AsIter {
 }
 
 pub type ChangeIterReturn<'a, T> = Box<[<<T as AsIter>::Item as Observable>::Changes<'a>]>;
-
 pub type ChangeFilterReturn<'a, T> = Box<
     [(
         usize,

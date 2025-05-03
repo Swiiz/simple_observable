@@ -6,8 +6,10 @@ use manual::*;
 
 pub use proc_macro::*;
 
-#[rustfmt::skip]
-pub struct Observer<'a, T: Observable + ?Sized> { pub inner: <T as Observable>::Observer<'a> }
+/// Wrapper type for an observer.
+pub struct Observer<'a, T: Observable + ?Sized> {
+    pub inner: <T as Observable>::Observer<'a>,
+}
 pub type Changes<'a, T> = <T as Observable>::Changes<'a>;
 
 pub type IterObserver<'a, T> = Observer<'a, ChangeIter<T>>;
@@ -86,7 +88,7 @@ pub struct ChangeFilter<T>(pub T);
 
 /// A trait for types that can be observed as an iterable.
 ///
-/// Used to avoid having to wrap the iterable in `ChangeIter<T>` when using `Observable`.
+/// Used to avoid having to wrap the iterable in `ChangeIter<T>`.
 pub trait ObservableAsIter: AsIter + Sized
 where
     ChangeIter<Self>: Observable,
@@ -96,6 +98,9 @@ where
     -> ChangeIterReturn<'_, Self>;
 }
 
+/// A trait for types that can be observed as an iterable over `MaybeObservable`
+///
+/// Used to avoid having to wrap the iterable in `ChangeFilter<T>`.
 pub trait ObservableAsFilter: AsIter + Sized
 where
     ChangeFilter<Self>: Observable,
