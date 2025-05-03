@@ -26,17 +26,17 @@ fn main() {
 
 fn iter_example() {
     // Simple iterators can use ChangesIter(_) wrapper (such as vec, boxed slice etc...)
-    // pull_changes can still be called without using the wrapper by using the ObservableAsIter trait
+    // iter_changes can still be called without using the wrapper by using the ObservableAsIter trait
     // For compatibility with the #[observable] macro, use the wrapper (which implements Observable trait)
     let mut vec: Vec<i32> = vec![1, 2, 3, 4, 5];
-    let mut obs: AsIterObserver<Vec<i32>> = Default::default();
+    let mut obs: IterObserver<Vec<i32>> = Default::default();
 
-    println!("{:?}", vec.pull_changes(&mut obs));
+    println!("{:?}", vec.iter_changes(&mut obs));
     vec.push(6);
     vec.push(7);
-    println!("{:?}", vec.pull_changes(&mut obs));
+    println!("{:?}", vec.iter_changes(&mut obs));
     vec.pop();
-    println!("{:?}", vec.pull_changes(&mut obs));
+    println!("{:?}", vec.iter_changes(&mut obs));
     vec.push(8);
-    println!("{:?}", vec.pull_changes(&mut obs));
+    println!("{:?}", vec.iter_changes(&mut obs));
 }

@@ -21,6 +21,24 @@ pub struct MapChanges<'a, K, V: Observable + 'static> {
     pub removed: Box<[K]>,
 }
 
+//TODO: write doc
+pub trait AsIter {
+    type Item;
+    type Iter<'a>: Iterator<Item = &'a Self::Item>
+    where
+        Self: 'a;
+    fn iter(&self) -> Self::Iter<'_>;
+}
+
+pub type ChangeIterReturn<'a, T> = Box<[<<T as AsIter>::Item as Observable>::Changes<'a>]>;
+
+pub type ChangeFilterReturn<'a, T> = Box<
+    [(
+        usize,
+        <<T as AsIter>::Item as MaybeObservable>::ChangesInner<'a>,
+    )],
+>;
+
 pub trait TriviallyObservable: Default + Copy {
     type Detective: Default + From<Self>;
     fn delta(&self, observer: &Self::Detective) -> Self::Detective;

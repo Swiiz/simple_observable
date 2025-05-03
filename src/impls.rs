@@ -3,19 +3,47 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    ops::{Deref, DerefMut},
+    ops::{AddAssign, Deref, DerefMut},
 };
 
 use crate::{
-    Atomic, ChangeIter, Changes, Observable, ObservableAsIter, Observer, Untracked, impl_for,
-    manual::{MapChanges, SubObservable, TriviallyObservable, new_observer},
+    Atomic, AtomicHash, ChangeFilter, ChangeIter, Changes, MaybeObservable, Observable,
+    ObservableAsFilter, ObservableAsIter, Observer, Untracked, impl_for,
+    manual::{
+        AsIter, ChangeFilterReturn, MapChanges, SubObservable, TriviallyObservable, new_observer,
+    },
 };
+
+pub trait IsOption {
+    type Inner;
+    fn cast(self) -> Option<Self::Inner>;
+}
+impl<T> IsOption for Option<T> {
+    type Inner = T;
+    fn cast(self) -> Option<T> {
+        self
+    }
+}
 
 impl<T: Observable> Default for Observer<'_, T> {
     fn default() -> Self {
         Observer {
             inner: Default::default(),
         }
+    }
+}
+
+impl<T: Observable + 'static> MaybeObservable for T
+where
+    for<'a> T::Changes<'a>: IsOption,
+{
+    type ChangesInner<'a> = <T::Changes<'a> as IsOption>::Inner;
+
+    fn try_pull_changes(
+        &self,
+        observer: &mut Observer<'_, Self>,
+    ) -> Option<Self::ChangesInner<'_>> {
+        self.pull_changes(observer).cast()
     }
 }
 
@@ -77,32 +105,74 @@ impl<'a, T: 'static> Observable for Untracked<T> {
     }
 }
 
-impl<T, H> Deref for Atomic<T, H> {
+impl<T, N> Deref for Atomic<T, N> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T, N: AddAssign + From<u8>> DerefMut for Atomic<T, N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.set_changed();
+        &mut self.inner
+    }
+}
+
+impl<T, N: From<u8>> From<T> for Atomic<T, N> {
+    fn from(inner: T) -> Self {
+        Self {
+            counter: 1.into(),
+            inner,
+        }
+    }
+}
+
+impl<T> Atomic<T> {
+    pub fn from(inner: T) -> Self {
+        inner.into()
+    }
+}
+
+impl<T: 'static, N: PartialEq + Clone + Default + 'static + Debug> Observable for Atomic<T, N> {
+    type Observer<'b> = N;
+    type Changes<'b> = Option<&'b T>;
+
+    fn pull_changes(&self, observer: &mut Observer<'_, Self>) -> Changes<'_, Self> {
+        (observer.inner != self.counter).then(|| {
+            observer.inner = self.counter.clone();
+            &self.inner
+        })
+    }
+}
+
+impl<T, H> Deref for AtomicHash<T, H> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T, H> DerefMut for Atomic<T, H> {
+impl<T, H> DerefMut for AtomicHash<T, H> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<T, H> From<T> for Atomic<T, H> {
+impl<T, H> From<T> for AtomicHash<T, H> {
     fn from(value: T) -> Self {
         Self(value, PhantomData)
     }
 }
 
-impl<'a, T: 'static + Hash, H: Hasher + Default + 'static> Observable for Atomic<T, H> {
-    type Observer<'b> = (H, u64);
+impl<'a, T: 'static + Hash, H: Hasher + Default + 'static> Observable for AtomicHash<T, H> {
+    type Observer<'b> = u64;
     type Changes<'b> = Option<&'b T>;
 
     fn pull_changes(&self, observer: &mut Observer<'_, Self>) -> Changes<'_, Self> {
-        let (hasher, previous_hash) = &mut observer.inner;
-        self.0.hash(hasher);
+        let previous_hash = &mut observer.inner;
+        let mut hasher = H::default();
+        self.0.hash(&mut hasher);
         let current_hash = hasher.finish();
         (*previous_hash != current_hash).then(|| {
             *previous_hash = current_hash;
@@ -153,12 +223,23 @@ impl<T> From<T> for ChangeIter<T> {
     }
 }
 
-pub trait AsIter {
-    type Item;
-    type Iter<'a>: Iterator<Item = &'a Self::Item>
-    where
-        Self: 'a;
-    fn iter(&self) -> Self::Iter<'_>;
+impl<T> Deref for ChangeFilter<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for ChangeFilter<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> From<T> for ChangeFilter<T> {
+    fn from(value: T) -> Self {
+        Self(value)
+    }
 }
 
 impl<T: IntoIterator> AsIter for T
@@ -205,10 +286,7 @@ where
     <T as AsIter>::Item: Observable,
 {
     type Observer<'a> = Vec<Observer<'a, <T as AsIter>::Item>>;
-    type Changes<'a>
-        = Box<[<<T as AsIter>::Item as Observable>::Changes<'a>]>
-    where
-        Self: 'a;
+    type Changes<'a> = Box<[<<T as AsIter>::Item as Observable>::Changes<'a>]>;
 
     fn pull_changes(&self, observer: &mut Observer<'_, Self>) -> Changes<'_, Self> {
         pull_iter_changes(&self.0, &mut observer.inner)
@@ -220,11 +298,63 @@ where
     ChangeIter<T>: for<'a> Observable<Observer<'a> = Vec<Observer<'a, <T as AsIter>::Item>>>,
     <T as AsIter>::Item: Observable,
 {
-    fn pull_changes(
+    fn iter_changes(
         &self,
         observer: &mut Observer<ChangeIter<Self>>,
     ) -> Box<[<<T as AsIter>::Item as Observable>::Changes<'_>]> {
         pull_iter_changes(self, &mut observer.inner)
+    }
+}
+
+pub(crate) fn pull_filter_changes<'a, T: AsIter>(
+    iter: &'a T,
+    observer: &mut Vec<Observer<<T as AsIter>::Item>>,
+) -> ChangeFilterReturn<'a, T>
+where
+    <T as AsIter>::Item: MaybeObservable,
+{
+    let prev_len = observer.len();
+    let mut len = 0;
+
+    let changes: Box<_> = iter
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| {
+            len += 1;
+            if i >= prev_len {
+                observer.push(Default::default())
+            }
+            v.try_pull_changes(&mut observer[i]).map(|v| (i, v))
+        })
+        .collect();
+    if observer.len() > len {
+        observer.truncate(changes.len());
+    }
+    changes
+}
+
+impl<T: 'static + AsIter> Observable for ChangeFilter<T>
+where
+    <T as AsIter>::Item: MaybeObservable,
+{
+    type Observer<'a> = Vec<Observer<'a, <T as AsIter>::Item>>;
+    type Changes<'a> = ChangeFilterReturn<'a, T>;
+
+    fn pull_changes(&self, observer: &mut Observer<'_, Self>) -> Changes<'_, Self> {
+        pull_filter_changes(&self.0, &mut observer.inner)
+    }
+}
+
+impl<T: AsIter + 'static> ObservableAsFilter for T
+where
+    ChangeFilter<T>: for<'a> Observable<Observer<'a> = Vec<Observer<'a, <T as AsIter>::Item>>>,
+    <T as AsIter>::Item: MaybeObservable,
+{
+    fn filter_changes(
+        &self,
+        observer: &mut Observer<ChangeFilter<Self>>,
+    ) -> ChangeFilterReturn<'_, Self> {
+        pull_filter_changes(self, &mut observer.inner)
     }
 }
 
